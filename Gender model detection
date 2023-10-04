@@ -1,0 +1,88 @@
+import cv2
+
+# Path to the image
+path = r'C:\Users\user\Desktop\computer vision\image.JPG'
+
+# Input image
+image = cv2.imread(path)
+image = cv2.resize(image, (460, 400))
+
+# Importing  models
+face_prototxt = "opencv_face_detector.pbtxt"
+face_caffemodel = "opencv_face_detector_uint8.pb"
+age_prototxt = "age_deploy.prototxt"
+age_caffemodel = "age_net.caffemodel"
+gender_prototxt = "gender_deploy.prototxt"
+gender_caffemodel = "gender_net.caffemodel"
+
+# Define mean values for model input
+MODEL_MEAN_VALUES = (78.4263377603, 87.7689143744, 114.895847746)
+
+# Load pre-trained models
+face_net = cv2.dnn.readNet(face_caffemodel, face_prototxt)
+age_net = cv2.dnn.readNet(age_caffemodel, age_prototxt)
+gender_net = cv2.dnn.readNet(gender_caffemodel, gender_prototxt)
+
+# Categories for age and gender
+age_labels = ['(0-2)', '(4-6)', '(8-12)', '(15-20)', '(21-25)', '(31-43)', '(48-53)', '(60-100)']
+gender_labels = ['Female', 'Male']
+
+# Copy image
+fr_cv = image.copy()
+
+# Face detection
+fr_h, fr_w, _ = fr_cv.shape
+blob = cv2.dnn.blobFromImage(fr_cv, 1.0, (300, 300), [104, 117, 123], True, False)
+
+face_net.setInput(blob)
+detections = face_net.forward()
+
+# Face bounding box creation
+face_boxes = []
+for i in range(detections.shape[2]):
+    confidence = detections[0, 0, i, 2]
+    if confidence > 0.7:
+        x1, y1, x2, y2 = int(detections[0, 0, i, 3] * fr_w), int(detections[0, 0, i, 4] * fr_h), \
+                         int(detections[0, 0, i, 5] * fr_w), int(detections[0, 0, i, 6] * fr_h)
+        face_boxes.append([x1, y1, x2, y2])
+        cv2.rectangle(fr_cv, (x1, y1), (x2, y2), (0, 255, 0), int(round(fr_h / 150)), 8)
+
+# Checking if face detected or not
+if not face_boxes:
+    print("No face detected")
+
+# Loop for all the faces detected
+for face_box in face_boxes:
+    # Extracting face as per the faceBox
+    face = fr_cv[max(0, face_box[1] - 15):min(face_box[3] + 15, fr_cv.shape[0] - 1),
+                  max(0, face_box[0] - 15):min(face_box[2] + 15, fr_cv.shape[1] - 1)]
+
+    # Extracting the main blob part
+    blob = cv2.dnn.blobFromImage(
+        face, 1.0, (227, 227), MODEL_MEAN_VALUES, swapRB=False)
+
+    # Prediction of gender
+    gender_net.setInput(blob)
+    gender_preds = gender_net.forward()
+    gender = gender_labels[gender_preds[0].argmax()]
+
+    # Prediction of age
+    age_net.setInput(blob)
+    age_preds = age_net.forward()
+    age = age_labels[age_preds[0].argmax()]
+
+    # Putting text of age and gender at the top of the box
+    text = f'Gender: {gender}, Age: {age}'
+    cv2.putText(fr_cv,
+                text,
+                (face_box[0], face_box[1] - 10),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.5,
+                (0, 255, 0),
+                2,
+                cv2.LINE_AA)
+
+# Display the image
+cv2.imshow('Gender and Age Detection', fr_cv)
+cv2.waitKey(0)
+cv2.destroyAllWindows()
