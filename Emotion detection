@@ -1,0 +1,55 @@
+import cv2
+from deepface import DeepFace
+
+myimage = cv2.imread("image.jpg")
+
+#define emotion labels
+emotion_labels = ['angry', 'disgust', 'fear', 'happy', 'sad', 'surprise', 'neutral']
+
+
+#load the pretrained emotion detection model
+model = DeepFace.build_model("Emotion")
+
+
+#resize image using function
+def resizeImg(frame, scale=1.44):
+    width = int(frame.shape[1] * scale)
+    height = int(frame.shape[0] * scale)
+    dimension = (width, height)
+    return cv2.resize(frame, dimension, interpolation=cv2.INTER_AREA)
+resizedImage = resizeImg(myimage)
+cv2.imshow("resized", resizedImage)
+cv2.waitKey(0)
+
+#convert image to greyscale
+grayImage = cv2.cvtColor(resizedImage, cv2.COLOR_BGR2GRAY)
+
+#load face cascade classifier
+faceCascade = cv2.CascadeClassifier("haarcascade_frontalface_default.xml")
+
+
+#detect image using cascade
+detectedFaces = faceCascade.detectMultiScale(grayImage,minSize=(45,45), minNeighbors=4)
+
+for (x,y,w,h) in detectedFaces:
+    #extract face region of interest
+    faceRegion = grayImage[y:y + h, x:x + w]
+    #resize the input for the emotion model   
+    resized_face = cv2.resize(faceRegion, (48, 48), interpolation= cv2.INTER_AREA)
+    
+    # Normalize the resized face image
+    normalized_face = resized_face / 255.0
+
+    # Reshape the image to match the input shape of the model
+    reshaped_face = normalized_face.reshape(1, 48, 48, 1)
+
+    #predict emotions using the pre-trained model
+    preds = model.predict(reshaped_face)
+    emotion_idx = preds.argmax()
+    emotion = emotion_labels[emotion_idx]
+    
+    cv2.rectangle(resizedImage, (x, y), (x + w, y + h), (0, 0, 255), 2)
+    cv2.putText(resizedImage, emotion, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2)
+
+cv2.imshow("Triz",resizedImage) 
+cv2.waitKey(0)
